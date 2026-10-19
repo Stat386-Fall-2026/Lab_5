@@ -1,0 +1,275 @@
+---
+title: "Lab 5: Regex, Cleaning, Joins, and Pipelines"
+author: "Your Name"
+format:
+  html:
+    toc: true
+    code-fold: false
+execute:
+  warning: false
+  message: false
+---
+
+# Objective
+
+In Lab 4, you explored a prepared General Conference dataset. In this lab, you will work backward from raw files and build a reproducible process that turns imperfect data into a dataset ready for analysis.
+
+You will inspect messy records, use regular expressions to standardize text, parse dates and runtimes, remove rows that are not talks, resolve duplicate speaker metadata, join tables, and write a script that recreates the processed dataset.
+
+The goal is not to make the data look correct by editing the CSV manually. The goal is to make the cleaning decisions explicit in code so the same process can be run again.
+
+## Before you begin
+
+This lab uses two raw files in `data/raw/`:
+
+- `talks_raw.csv`: talk-level information, including transcript text.
+- `speaker_metadata_raw.csv`: speaker-level metadata intended to be joined to the talk records.
+
+The files contain a small selection of realistic data-quality problems. Do not edit either CSV manually.
+
+# Part 1: Inspect the raw data
+
+## 1. Load and inspect the files
+
+Read both CSV files into DataFrames named `talks_raw` and `speaker_metadata_raw`.
+
+Display the first few rows of each file. For the talk file, focus on these columns when they are present:
+
+- `talk_name`
+- `speaker`
+- `conference`
+- `date`
+- `runtime`
+- `link`
+
+```{python}
+# Load the two raw CSV files here.
+```
+
+Determine the number of rows and columns in each DataFrame. Also report:
+
+- the number of missing values in each column of `talks_raw`;
+- the number of duplicate values in `speaker_metadata_raw["speaker"]`; and
+- whether either file contains an unnecessary index-like column.
+
+```{python}
+# Inspect dimensions, missing values, duplicate keys, and column names.
+```
+
+**Your answer:** Identify three data-quality issues you found. For each issue, explain how it could affect analysis or joining if it were left unresolved. Include at least one example of a text-encoding or whitespace problem.
+
+After you have identified an encoding problem, follow your instructor's repository instructions to request the bounded AI collaborator pull request for an encoding-repair helper. Review the proposed code and tests, compare representative strings before and after repair, and merge only after you have verified that the helper behaves as expected. Do not ask the collaborator to write the rest of your cleaning pipeline.
+
+::: {.callout-note}
+## A cleaning principle
+
+A value that looks unusual is not automatically wrong. Before changing a value, determine what it represents and what evidence supports the change.
+:::
+
+# Part 2: Clean text with string methods and regex
+
+## 2. Standardize speaker names
+
+Some speaker values contain prefixes such as `By Elder`, `By President`, `By Sister`, or `By Brother`. These prefixes are not part of the speaker's name.
+
+Create a cleaned `speaker` column that:
+
+- removes one leading speaker prefix, when present;
+- removes leading and trailing whitespace; and
+- replaces repeated whitespace, including nonbreaking spaces, with a single ordinary space.
+
+Use a regular expression for the prefix removal and whitespace standardization. Do not remove matching words that occur later in a name.
+
+```{python}
+# Create a cleaned speaker column using regex.
+```
+
+Display the original and cleaned values for at least five rows that changed.
+
+**Your answer:** Why should the prefix-removal pattern be anchored to the beginning of the string? What could go wrong if it removed the same words wherever they appeared?
+
+## 3. Standardize links and remove non-talk rows
+
+The raw file contains an index-like column and may contain rows that describe a session rather than an individual talk. Some URLs also include query parameters.
+
+Create a cleaned DataFrame that:
+
+- removes unnecessary index-like columns;
+- retains only rows representing actual talks;
+- removes URL query parameters from `link`, while preserving the main URL; and
+- does not discard a talk simply because a nonessential field is missing.
+
+Use an explicit rule to identify non-talk rows. Explain why the rule is appropriate for these data.
+
+```{python}
+# Clean the rows, index-like columns, and links here.
+```
+
+**Your answer:** Which fields did you use to identify non-talk rows? Why is that safer than dropping every row that has any missing value?
+
+::: {.callout-tip}
+## Regex reminders
+
+These examples illustrate useful patterns. Adapt them to the actual values in your data.
+
+```python
+# Match a prefix only at the start of a string.
+r"^(By Elder|By President|By Sister|By Brother)\s+"
+
+# Match one or more whitespace characters.
+r"\s+"
+
+# Split a URL before its query string.
+r"\?.*$"
+```
+:::
+
+# Part 3: Parse fields and resolve metadata
+
+## 4. Convert dates and runtimes
+
+The `date` and `runtime` columns are read from CSV as strings. Convert `date` to a datetime type and `runtime` to a numeric duration in seconds.
+
+For runtime values such as `10:15`, calculate the total seconds as minutes times 60 plus seconds. Preserve missing runtimes as missing values rather than replacing them with zero.
+
+Create these columns:
+
+- `date`: a datetime value;
+- `year`: the year extracted from `date`; and
+- `runtime_seconds`: the runtime expressed in seconds.
+
+```{python}
+# Parse dates and runtimes here.
+```
+
+Display the data types and the first few parsed values.
+
+**Your answer:** Why would treating a missing runtime as zero lead to misleading summaries? What is the difference between a missing value and a runtime of zero seconds?
+
+## 5. Clean and validate speaker metadata
+
+The metadata file may contain speaker prefixes, inconsistent capitalization in role labels, and duplicate speaker keys.
+
+Clean the metadata so that:
+
+- speaker names use the same standardization as the talk table;
+- role labels have a consistent format;
+- there is no more than one metadata record per cleaned speaker; and
+- the rule used to resolve duplicate keys is explicit and reproducible.
+
+Do not silently drop duplicate rows without checking whether their values agree. Inspect duplicate keys first, then document your resolution rule.
+
+```{python}
+# Clean speaker_metadata_raw and resolve duplicate keys here.
+```
+
+Report how many duplicate speaker keys existed before cleaning and confirm that the cleaned metadata has unique speaker keys.
+
+**Your answer:** Why can duplicate keys create problems during a join? Describe how you decided which metadata record to retain when duplicate records disagreed.
+
+# Part 4: Join and validate the cleaned data
+
+## 6. Join speaker metadata to talks
+
+Join the cleaned talk records to the cleaned speaker metadata using the standardized speaker name.
+
+Create a DataFrame named `talks_clean` that contains the cleaned talk fields and the speaker's cleaned role.
+
+Use a left join so that a talk is not removed merely because matching metadata is unavailable. Use pandas' merge validation to check the expected relationship between the talk table and the speaker metadata table.
+
+```{python}
+# Join the cleaned tables and validate the join.
+```
+
+After the join, report:
+
+- the number of talk rows before the join;
+- the number of rows after the join;
+- the number of talks without a matched role; and
+- whether the row count changed unexpectedly.
+
+**Your answer:** Why is a left join appropriate here? What does a many-to-one merge validation check, and why is it useful?
+
+## 7. Add data-quality checks
+
+Write checks for at least four important properties of `talks_clean`. Your checks must include:
+
+- unique talk links;
+- valid parsed dates;
+- nonnegative word counts; and
+- no duplicate speaker keys in the cleaned metadata.
+
+You may add other checks that are useful for this dataset.
+
+```{python}
+# Write validation checks here.
+```
+
+**Your answer:** Which check would be most likely to catch a serious error in your pipeline? Explain what could go wrong if that check failed but the pipeline continued.
+
+# Part 5: Build a reproducible pipeline
+
+## 8. Put the cleaning steps into reusable functions
+
+Move your cleaning logic into reusable functions. At a minimum, create functions for:
+
+- standardizing speaker names;
+- cleaning talk records;
+- cleaning speaker metadata;
+- parsing runtimes; and
+- validating the cleaned result.
+
+Your functions should accept DataFrames or values as arguments and return their results. Avoid relying on variables that exist only in the Quarto document.
+
+```{python}
+# Define or import your reusable functions here.
+```
+
+## 9. Create a script that recreates the processed dataset
+
+Create `scripts/clean_data.py`. The script should:
+
+1. read the raw files from `data/raw/`;
+2. apply the cleaning and parsing functions;
+3. clean and deduplicate speaker metadata;
+4. join the tables;
+5. run your validation checks; and
+6. write the final dataset to `data/processed/talks_clean.csv`.
+
+Running the following command from the repository root should recreate the processed dataset:
+
+```bash
+uv run python scripts/clean_data.py
+```
+
+Do not manually edit the raw or processed CSV files. If a cleaning decision changes, update the code and rerun the script.
+
+Run the command and confirm that the processed dataset is created successfully.
+
+**Your answer:** Explain why a script that recreates the dataset is more reproducible than a sequence of manual spreadsheet edits. Name one situation in which another person could benefit from rerunning your pipeline.
+
+# Part 6: Final reflection
+
+## 10. Compare raw and processed data
+
+Compare the raw talk file with your final `talks_clean` dataset. Summarize the most important changes made by your pipeline.
+
+Your response should address:
+
+- which problems were corrected;
+- which missing values were preserved and why;
+- how you ensured the join did not unexpectedly multiply rows; and
+- which validation checks provide evidence that the output is ready for further analysis.
+
+**Your answer:** In three to five sentences, explain how your pipeline turns raw data into data that can be trusted for the next stage of analysis.
+
+::: {.callout-note}
+## Before submitting
+
+- Your raw CSV files have not been manually edited.
+- Your cleaning steps are implemented in code.
+- Your join is validated and does not unexpectedly increase the number of talk rows.
+- Your validation checks run successfully.
+- `uv run python scripts/clean_data.py` recreates the processed dataset.
+- The Quarto document renders from top to bottom without errors.
+:::
