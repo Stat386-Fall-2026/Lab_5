@@ -66,7 +66,7 @@ Commit and push both the source document and the rendered HTML file:
 
 ```bash
 git add lab_5.qmd lab_5.html uv.lock
-git commit -m "Complete Lab 4"
+git commit -m "Complete Lab 5"
 git push
 ```
 
